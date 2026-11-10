@@ -1,0 +1,19 @@
+:root {
+  --canvas-white: #ffffff;
+  --card-light: #F7F7F7;
+  --ink-black: #111111;
+  --ink-gray: #666666;
+  --ink-light: #999999;
+  --accent-border: #E5E5E5;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+
+  /* terminal only */
+  --term-green: #3DDC84;
+  --term-amber: #E8B44A;
+  --term-bg: #0A0A0A;
+  --term-bar: #141414;
+  --term-line: #1F1F1F;
+  --term-text: #BBBBBB;
+}

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      # The banned strings live in a repository secret, never in the repo.
+      # Forks and pull requests from forks have no access to it, so the
+      # step is skipped with a notice instead of failing.
+      - name: Scrub check
+        env:
+          SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+        run: |
+          if [ -z "$SCRUB_PATTERNS" ]; then
+            echo "::notice title=Scrub check skipped::SCRUB_PATTERNS is not set."
+            exit 0
+          fi
+          bash scripts/scrub-check.sh
