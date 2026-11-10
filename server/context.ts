@@ -1,3 +1,5 @@
+import { describeOutputs, type OutputEnv, type OutputInfo } from './outputs/index.js';
+
 // GET /api/context answers with the visitor's IP, rough location and
 // Accept-Language and keeps none of it. Every host calls getContext
 // and mounts no request logger, so the IP lives for one request only.
@@ -20,6 +22,8 @@ export interface Context {
   geo: Geo | null;
   acceptLanguage: string | null;
   receivedAt: string;
+  outputs?: OutputInfo[];
+  forwardIp?: boolean;
 }
 
 // Headers arrive as Node's IncomingHttpHeaders or as a Web Headers
@@ -27,10 +31,10 @@ export interface Context {
 // Cloudflare functions without converting between the two shapes.
 export type HeaderSource = Headers | Record<string, string | string[] | undefined>;
 
-// The only setting the server reads is the optional geolocation URL,
-// so a host without location headers can still show a country, and a
-// deployment that leaves it unset never calls any outside service.
-export interface ContextEnv {
+// The optional geolocation URL lets a host without location headers
+// show a country, and the output settings say where events may go.
+// Left unset, the server never calls any outside service at all.
+export interface ContextEnv extends OutputEnv {
   GEO_PROVIDER_URL?: string;
 }
 
@@ -46,7 +50,7 @@ export interface ContextInput {
 // Reads one header from either header shape and trims it, so callers
 // get a clean string or undefined, and a header holding nothing but
 // whitespace counts as missing rather than as an empty string value.
-function header(headers: HeaderSource, name: string): string | undefined {
+export function header(headers: HeaderSource, name: string): string | undefined {
   let s: string | null | undefined;
   if (headers instanceof Headers) {
     s = headers.get(name);
@@ -60,7 +64,7 @@ function header(headers: HeaderSource, name: string): string | undefined {
 // The visitor's IP is the first address in X-Forwarded-For, which
 // the proxy in front of this server sets. IPv4 addresses mapped
 // into IPv6 lose their ::ffff: prefix, so they read normally.
-function clientIp(headers: HeaderSource, socketIp: string | null | undefined): string | null {
+export function clientIp(headers: HeaderSource, socketIp: string | null | undefined): string | null {
   const fwd = header(headers, 'x-forwarded-for');
   const raw = fwd ? fwd.split(',')[0].trim() : (socketIp ?? null);
   if (!raw) return null;
@@ -169,11 +173,16 @@ export async function getContext({ headers, ip: socketIp, env }: ContextInput): 
   // nowhere, so the provider is asked only when the host named no
   // country and a GEO_PROVIDER_URL has been configured for the site.
   const geo = geoFromHeaders(headers) ?? (await geoFromProvider(ip, env));
+  const { outputs, forwardIp } = describeOutputs(env);
   return {
     ip,
     geo,
     acceptLanguage: header(headers, 'accept-language') ?? null,
     receivedAt: new Date().toISOString(),
+    // Names, hosts and the IP setting only, so the page can check them
+    // against what its consent gate said. Both fields are left out when
+    // no output is enabled, so the default answer stays unchanged.
+    ...(outputs.length ? { outputs, forwardIp } : {}),
   };
 }
 

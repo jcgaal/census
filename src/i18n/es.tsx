@@ -1,6 +1,7 @@
 // Spanish copy for every section and the terminal, typed as Copy so it
 // must match the English shape key for key, and any key that is missing
 // or misspelled here fails the typecheck before the page ever builds.
+import { listOf, type OutputInfo } from './list';
 import { pageTitle, site } from '../site.config';
 import type { Copy } from './lang';
 
@@ -19,19 +20,28 @@ export const es: Copy = {
     label: '00 // Consentimiento',
     title: 'Lo que un sitio web sabe de ti en tu primera visita',
     body: (
-      <>
-        <p>
-          Esta página registra los datos que una plataforma de datos de clientes como Segment recogería sobre ti, y te los va mostrando en el momento, con el
-          mismo formato de eventos que usa Segment.
-        </p>
-        <p>
-          <strong>Todo se queda en tu navegador.</strong>{' '}
-          <span className="dim">No guardamos nada de nuestro lado ni lo enviamos a terceros, y puedes borrarlo cuando quieras.</span>
-        </p>
-      </>
+      <p>
+        Esta página registra los datos que una plataforma de datos de clientes como Segment recogería sobre ti, y te los va mostrando en el momento, con el mismo
+        formato de eventos que usa Segment.
+      </p>
+    ),
+    bodyLocal: (
+      <p>
+        <strong>Todo se queda en tu navegador.</strong>{' '}
+        <span className="dim">No guardamos nada de nuestro lado ni lo enviamos a terceros, y puedes borrarlo cuando quieras.</span>
+      </p>
     ),
     start: 'Empezar',
     sample: 'Ver datos de ejemplo',
+    bodyOutputs: (outputs: OutputInfo[], forwardIp: boolean) => (
+      <p>
+        <strong>Este sitio también envía tus eventos a {listOf(outputs.map((o) => `${o.name} (${o.host})`), 'y')}.</strong>{' '}
+        <span className="dim">
+          Cuando pulsas Empezar, su propio servidor reenvía cada evento que ves aquí{forwardIp ? ', con tu dirección IP' : ', sin tu dirección IP'}, y la terminal
+          muestra cada envío. Olvidarme detiene los envíos siguientes, pero lo que ya se envió se queda en esa herramienta.
+        </span>
+      </p>
+    ),
   },
   fieldCols: ['Dato', 'Origen'],
   s01: {
@@ -162,6 +172,7 @@ export const es: Copy = {
     emailPlaceholder: 'tu@empresa.com',
     submit: 'Identificarme',
     note: 'Tu correo no se envía a ningún lado. Puedes usar uno falso.',
+    noteOutputs: (names: string[]) => `Tu correo se envía a ${listOf(names, 'y')} con la llamada identify. Puedes usar uno falso.`,
   },
   s07: {
     label: '07 // Destinos',
@@ -182,6 +193,7 @@ export const es: Copy = {
       ['Data warehouse', 'Una fila en una tabla tracks o pages'],
     ],
     note: 'Es solo una vista previa. Esta página no le envía nada a estas empresas.',
+    alsoSent: (name: string, host: string) => `También se envía a ${name} (${host})`,
   },
   s08: {
     label: '08 // Límites',
@@ -215,12 +227,20 @@ export const es: Copy = {
     contact: 'Contacto',
     privacy: 'Privacidad',
     privacyNote: 'Nada de esta página se guarda ni se comparte.',
+    privacyNoteOutputs: 'Aquí no se guarda nada. Los eventos solo van a los destinos nombrados en la pantalla de consentimiento.',
   },
   term: {
     pending: 'pendiente',
     granted: 'otorgado',
     sampleConsent: 'datos de ejemplo (no se captura nada)',
     forgot: 'cookie borrada · 0 eventos · perfil eliminado',
+    forgotOutputs: (names: string[]) => `envíos detenidos · lo que ya se envió a ${listOf(names, 'y')} se queda ahí y hay que borrarlo en esa herramienta`,
+    sentNote: '// reenviado por el servidor de este sitio, sin tu IP. Las claves nunca llegan al navegador.',
+    sentNoteIp: '// reenviado por el servidor de este sitio, con tu dirección IP. Las claves nunca llegan al navegador.',
+    sentNoResponse: 'sin respuesta',
+    sentError: (status: string) => `no enviado: /api/collect respondió ${status}`,
+    outputsMismatch: 'destinos sin usar: la configuración del servidor no coincide con lo que dijo la pantalla de consentimiento',
+    outputsUnverified: 'destinos sin usar: el servidor no pudo confirmarlos',
     srcCookie: '// origen: cookie propia que puso esta página',
     srcCookieSample: '// origen: datos de ejemplo (no se puso ninguna cookie)',
     srcPage: '// origen: URL de la página y document.referrer',

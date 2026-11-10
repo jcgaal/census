@@ -22,3 +22,8 @@ interface ImportMetaEnv {
   readonly VITE_REPO_URL?: string;
   readonly VITE_OG_IMAGE_URL?: string;
 }
+
+// The outputs the build found enabled, as names and hosts only, and
+// whether the visitor's IP is forwarded. Vite replaces this constant
+// at build time from the same settings that the server reads.
+declare const __CENSUS_OUTPUTS__: { outputs: { name: string; host: string }[]; forwardIp: boolean };

@@ -6,6 +6,8 @@ export interface ServerContext {
   geo: { country: string | null; region: string | null; city: string | null; source: string } | null;
   acceptLanguage: string | null;
   receivedAt: string;
+  outputs?: { name: string; host: string }[];
+  forwardIp?: boolean;
 }
 
 // The only request the page ever makes, and only after consent. It

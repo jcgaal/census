@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { publicOutputs } from './server/outputs/index.js';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -27,8 +28,13 @@ function siteHtml(env: Record<string, string>): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+  // The consent gate must name the outputs before the visitor agrees to
+  // anything, so the build bakes in their names and hosts, from
+  // CENSUS_OUTPUTS or the server's settings. No key is included.
+  const outputs = publicOutputs(loadEnv(mode, process.cwd(), ''));
   return {
     plugins: [react(), siteHtml(env)],
+    define: { __CENSUS_OUTPUTS__: JSON.stringify(outputs) },
     server: {
       port: 5173,
       proxy: {
