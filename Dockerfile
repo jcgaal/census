@@ -3,6 +3,11 @@
 # The first stage installs every dependency and builds the page.
 # The second keeps the runtime packages only.
 FROM node:22-slim AS build
+# Public output identity for the consent screen, and nothing else:
+# CENSUS_OUTPUTS lists Name=host pairs, e.g. Segment=api.segment.io.
+# Keys, secrets and full webhook URLs are runtime env only, never here.
+ARG CENSUS_OUTPUTS=
+ARG OUTPUT_FORWARD_IP=false
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

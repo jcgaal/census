@@ -3,6 +3,7 @@ import { ensureAnonymousId, forgetAll, readCookie, recordConsent, storedConsent,
 import { buildIdentify, buildPage, buildTrack, type Props, type SegmentEvent } from './events';
 import { normalizeEmail, sha256 } from './hash';
 import { sampleAnon, sampleEvents, samplePage, sampleServer } from './sampleData';
+import { createCollector, type Collector, type SentBatch } from '../lib/collect';
 import { fetchServerContext, type ServerContext } from '../lib/context';
 import { site } from '../site.config';
 
@@ -30,7 +31,8 @@ export type BlockKind =
   | 'identify'
   | 'destinations'
   | 'limits'
-  | 'summary';
+  | 'summary'
+  | 'sent';
 
 // What the identify block shows: the identify call, every earlier event
 // with the new userId attached, how many were anonymous before, and the
@@ -43,14 +45,23 @@ export interface IdentifyData {
   hash: string;
 }
 
+// What a sent block shows: one batch posted to /api/collect with each
+// output's result, or a note saying why the outputs were not used,
+// when the server's outputs could not be matched to the consent gate.
+export interface SentData {
+  batch?: SentBatch;
+  note?: 'mismatch' | 'unverified';
+}
+
 // One printed terminal block. The key is unique for React, the section
-// records which part of the page printed it, and data is only present
-// on identify blocks, which need the details computed at identify time.
+// records which part of the page printed it, data is only present on
+// identify blocks, and sent only on blocks that report an output send.
 export interface Block {
   key: string;
   kind: BlockKind;
   section: string;
   data?: IdentifyData;
+  sent?: SentData;
 }
 
 // Everything the page renders from. Events hold the full stream in the
@@ -118,6 +129,10 @@ export function createStore() {
   // after the erase cannot bring the visitor's data back on screen.
   let generation = 0;
   const subs = new Set<() => void>();
+  // The output collector for the current live visit. It exists only when
+  // the build named outputs and the visitor pressed Start, and it is
+  // stopped and dropped by Forget me, sample mode or a new visit.
+  let collector: Collector | null = null;
 
   // Merges a patch, or the result of a function of the current state,
   // and notifies every subscriber, which is how useSyncExternalStore
@@ -134,6 +149,29 @@ export function createStore() {
   // non-null assertion on the anon field is safe at each call site.
   const ids = () => ({ anonymousId: state.anon!.anonymousId, userId: state.userId });
 
+  // Sent blocks print under the section the visitor reached last, so on
+  // narrow screens each send shows up inline where they are reading,
+  // and under the identity section before any section has been seen.
+  const sentBlock = (sent: SentData): Block => ({ ...block('sent', state.viewed[state.viewed.length - 1] ?? '01_identity'), sent });
+  const addSent = (sent: SentData) => set((s) => ({ blocks: [...s.blocks, sentBlock(sent)] }));
+
+  // Stops the collector and forgets it. Its queue is dropped and any
+  // answer still on the way is ignored, so no further send can happen
+  // and nothing more about earlier sends is printed in the terminal.
+  const stopCollector = () => {
+    collector?.stop();
+    collector = null;
+  };
+
+  // Outputs match when the server names exactly the outputs the consent
+  // gate named, by name and host, with the same IP setting. Otherwise
+  // the visitor was told something else, so the page sends nothing.
+  const sameOutputs = (a: { name: string; host: string }[], forwardIp: boolean) => {
+    const key = (o: { name: string; host: string }) => `${o.name}|${o.host}`;
+    const want = site.outputs.map(key).sort().join(',');
+    return a.map(key).sort().join(',') === want && forwardIp === site.forwardIp;
+  };
+
   // The server is asked for the visitor's IP and location once a visit.
   // A response arriving after Forget me belongs to an erased visit,
   // so the generation check drops it instead of displaying it.
@@ -142,9 +180,23 @@ export function createStore() {
     set({ serverStatus: 'loading' });
     try {
       const data = await fetchServerContext();
-      if (gen === generation) set({ server: data, serverStatus: 'done' });
+      if (gen !== generation) return;
+      set({ server: data, serverStatus: 'done' });
+      // The server's answer also lists its outputs. Sending starts only
+      // when they match the consent gate, and the queued events since
+      // Start then leave together in the first batch to the outputs.
+      if (collector && sameOutputs(data.outputs ?? [], data.forwardIp ?? false)) collector.enable();
+      else if (collector) {
+        stopCollector();
+        addSent({ note: 'mismatch' });
+      }
     } catch {
-      if (gen === generation) set({ serverStatus: 'error' });
+      if (gen !== generation) return;
+      set({ serverStatus: 'error' });
+      if (collector) {
+        stopCollector();
+        addSent({ note: 'unverified' });
+      }
     }
   }
 
@@ -156,6 +208,14 @@ export function createStore() {
     state = { ...state, anon };
     const pageEvent = buildPage({ anonymousId: anon.anonymousId, userId: null });
     set({ mode: 'live', consentAt, anon, pageEvent, events: [pageEvent], blocks: [block('whoami')], viewed: [] });
+    // With outputs named on the consent gate, a collector starts holding
+    // events now, and it sends nothing until the server has confirmed
+    // the same outputs in its reply to the /api/context request.
+    stopCollector();
+    if (site.outputs.length) {
+      collector = createCollector((batch) => addSent({ batch }));
+      collector.add(pageEvent);
+    }
     void fetchContext();
   }
 
@@ -192,6 +252,7 @@ export function createStore() {
     // fixed sample set, no cookie or storage is written, and the server
     // is never called, since the sample answer is already marked done.
     startSample() {
+      stopCollector();
       set({
         mode: 'sample',
         consentAt: new Date().toISOString(),
@@ -210,6 +271,7 @@ export function createStore() {
     // a record that the profile was erased and not just hidden.
     forget() {
       generation++;
+      stopCollector();
       forgetAll();
       set(empty([block('forget'), block('whoami')]));
     },
@@ -221,6 +283,7 @@ export function createStore() {
       if (state.mode !== 'live' || !state.anon) return;
       const e = buildTrack(event, properties, ids());
       set((s) => ({ events: [...s.events, e] }));
+      collector?.add(e);
     },
 
     // Marks a section as seen and appends its blocks the first time only,
@@ -258,6 +321,7 @@ export function createStore() {
         events: [...s.events, identify],
         blocks: [...s.blocks, block('identify', '06_identity_resolution', { identify, merged, mergedCount: anonymousCount, normalizedEmail, hash })],
       }));
+      collector?.add(identify);
     },
   };
 }

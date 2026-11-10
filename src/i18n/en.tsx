@@ -1,6 +1,7 @@
 // English copy for every section and the terminal, and the reference
 // shape for every other language, so a missing or extra key in another
 // copy object fails the typecheck rather than showing up at runtime.
+import { listOf, type OutputInfo } from './list';
 import { pageTitle, site } from '../site.config';
 import type { Row } from './lang';
 
@@ -19,19 +20,28 @@ export const en = {
     label: '00 // Consent',
     title: 'What a website learns about you on your first visit',
     body: (
-      <>
-        <p>
-          This page records the data a customer data platform such as Segment would collect about you and shows it to you as it happens, in Segment's own
-          event format.
-        </p>
-        <p>
-          <strong>Everything stays in your browser.</strong>{' '}
-          <span className="dim">Nothing is stored on our side or sent to anyone else, and you can erase it whenever you want.</span>
-        </p>
-      </>
+      <p>
+        This page records the data a customer data platform such as Segment would collect about you and shows it to you as it happens, in Segment's own event
+        format.
+      </p>
+    ),
+    bodyLocal: (
+      <p>
+        <strong>Everything stays in your browser.</strong>{' '}
+        <span className="dim">Nothing is stored on our side or sent to anyone else, and you can erase it whenever you want.</span>
+      </p>
     ),
     start: 'Start',
     sample: 'Show sample data instead',
+    bodyOutputs: (outputs: OutputInfo[], forwardIp: boolean) => (
+      <p>
+        <strong>This site also sends your events to {listOf(outputs.map((o) => `${o.name} (${o.host})`), 'and')}.</strong>{' '}
+        <span className="dim">
+          After you press Start, its own server forwards each event shown here{forwardIp ? ', with your IP address' : ', without your IP address'}, and the terminal shows
+          every send. Forget me stops further sends, but data already sent stays in that tool.
+        </span>
+      </p>
+    ),
   },
   fieldCols: ['Field', 'Source'] as [string, string],
   s01: {
@@ -155,6 +165,7 @@ export const en = {
     emailPlaceholder: 'you@company.com',
     submit: 'Identify me',
     note: 'Your email is not sent anywhere. Use a fake one if you prefer.',
+    noteOutputs: (names: string[]) => `Your email goes to ${listOf(names, 'and')} with the identify call. Use a fake one if you prefer.`,
   },
   s07: {
     label: '07 // Destinations',
@@ -174,6 +185,7 @@ export const en = {
       ['Data warehouse', 'One row in a tracks or pages table'],
     ] as Row[],
     note: 'Preview only. Nothing on this page is sent to these companies.',
+    alsoSent: (name: string, host: string) => `Also sent to ${name} (${host})`,
   },
   s08: {
     label: '08 // Limits',
@@ -205,12 +217,20 @@ export const en = {
     contact: 'Contact',
     privacy: 'Privacy',
     privacyNote: 'Nothing on this page is stored or shared.',
+    privacyNoteOutputs: 'Nothing is stored here. Events go only to the outputs named on the consent screen.',
   },
   term: {
     pending: 'pending',
     granted: 'granted',
     sampleConsent: 'sample data (nothing captured)',
     forgot: 'cookie deleted · 0 events · profile erased',
+    forgotOutputs: (names: string[]) => `further sends stopped · data already sent to ${listOf(names, 'and')} stays there and must be deleted in that tool`,
+    sentNote: "// forwarded by this site's own server, IP removed first. Keys never reach the browser.",
+    sentNoteIp: "// forwarded by this site's own server, with your IP address. Keys never reach the browser.",
+    sentNoResponse: 'no response',
+    sentError: (status: string) => `not sent: /api/collect answered ${status}`,
+    outputsMismatch: "outputs not used: the server's output settings differ from what the consent screen said",
+    outputsUnverified: 'outputs not used: the server could not confirm them',
     srcCookie: '// source: first-party cookie set by this page',
     srcCookieSample: '// source: sample data (no cookie was set)',
     srcPage: '// source: page URL and document.referrer',

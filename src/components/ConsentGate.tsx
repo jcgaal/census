@@ -1,4 +1,5 @@
 import { useT } from '../i18n/lang';
+import { site } from '../site.config';
 import { useIsNarrow } from '../useIsNarrow';
 import { useAppState, useStoreApi } from '../tracking/store';
 import { Terminal } from './Terminal/Terminal';
@@ -11,6 +12,10 @@ export function ConsentGate() {
   const s = useAppState();
   const t = useT();
   const narrow = useIsNarrow();
+  // With outputs on, the second paragraph names each one and its host
+  // and says whether the IP goes with the events, so the visitor knows
+  // where their data goes before pressing Start on this screen.
+  const second = site.outputs.length ? t.consent.bodyOutputs(site.outputs, site.forwardIp) : t.consent.bodyLocal;
 
   // Start grants consent, sets the cookie and starts the live listeners,
   // while Show sample data runs the page on fictional data, so nothing
@@ -23,6 +28,7 @@ export function ConsentGate() {
       <div className="philosophy">
         <h1>{t.consent.title}</h1>
         {t.consent.body}
+        {second}
       </div>
       <div className="pill-row">
         <button

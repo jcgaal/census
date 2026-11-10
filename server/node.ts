@@ -1,12 +1,18 @@
-import express from 'express';
+import express, { type Request } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getContext, NO_STORE } from './context.js';
+import { collect, MAX_BYTES } from './collect.js';
+import { getContext, NO_STORE, type ContextEnv } from './context.js';
 
-// The Node host serves /api/context, /health and, in production, the
-// built page. No request logger is mounted, so the visitor's IP is
-// never written to a log and is gone once the response has been sent.
+// The Node host serves /api/context, /api/collect, /health and, in
+// production, the built page. No request logger is mounted, so the
+// visitor's IP is never written to a log once a response is sent.
+
+// Every setting the server reads comes from the process environment,
+// the geolocation URL and the output keys alike, so one .env file
+// configures the Node host the same way the hosted platforms do.
+const env = process.env as ContextEnv;
 
 const app = express();
 app.disable('x-powered-by');
@@ -26,10 +32,54 @@ app.get('/api/context', async (req, res) => {
   const ctx = await getContext({
     headers: req.headers,
     ip: req.socket.remoteAddress,
-    env: { GEO_PROVIDER_URL: process.env.GEO_PROVIDER_URL },
+    env,
   });
   res.set(NO_STORE);
   res.json(ctx);
+});
+
+// Reads the request body as text and stops at the size limit, so an
+// oversized batch is turned away without being read in full and no
+// body parser error handler gets a chance to print it to a log.
+function readBody(req: Request, limit: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (Number(req.headers['content-length'] ?? 0) > limit) {
+      resolve(null);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    // Past the limit the reader stops listening and pauses the stream,
+    // so the rest of the body is never buffered, and the route answers
+    // 413 before the connection is closed once that answer is sent.
+    const onData = (c: Buffer) => {
+      size += c.length;
+      if (size > limit) {
+        req.off('data', onData);
+        req.pause();
+        resolve(null);
+        return;
+      }
+      chunks.push(c);
+    };
+    req.on('data', onData);
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolve(null));
+  });
+}
+
+// The collect route forwards the page's events to the enabled outputs.
+// The body is capped at 64 KB, and the reply holds only the results,
+// sent with no-store like every other answer from this server.
+app.all('/api/collect', async (req, res) => {
+  const body = req.method === 'POST' ? await readBody(req, MAX_BYTES) : '';
+  if (body === null) {
+    res.on('finish', () => req.destroy());
+    res.status(413).set({ ...NO_STORE, Connection: 'close' }).json({ error: 'payload too large' });
+    return;
+  }
+  const reply = await collect({ method: req.method, headers: req.headers, host: req.headers.host, body, ip: req.socket.remoteAddress, env });
+  res.status(reply.status).set(NO_STORE).json(reply.body);
 });
 
 // In production the same process serves the built page. Unknown

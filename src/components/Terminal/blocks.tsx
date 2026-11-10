@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useT } from '../../i18n/lang';
 import { NOT_EXPOSED } from '../../tracking/context';
 import { allDestinations } from '../../destinations';
+import { site } from '../../site.config';
 import { compactProps, eventLabel, timeOf } from '../../tracking/events';
 import { buildProfile, currentCookieString, maskIp, useAppState, type Block, type State } from '../../tracking/store';
 import { useDevice } from '../../tracking/useDevice';
@@ -27,7 +28,46 @@ function Whoami({ b, s }: { b: Block; s: State }) {
 // that the page has started again from a clean anonymous state.
 function Forget({ b }: { b: Block }) {
   const t = useT().term;
-  return <CommandBlock blockKey={b.key} steps={[{ cmd: 'forget --all', output: () => <pre className="green">{t.forgot}</pre> }]} />;
+  // With outputs on, the line also says that sends have stopped and
+  // that what already left lives on in those tools, since erasing
+  // this page's state cannot reach data held by another service.
+  const names = site.outputs.map((o) => o.name);
+  const output = () => (
+    <>
+      <pre className="green">{t.forgot}</pre>
+      {names.length > 0 && <pre className="amber">{t.forgotOutputs(names)}</pre>}
+    </>
+  );
+  return <CommandBlock blockKey={b.key} steps={[{ cmd: 'forget --all', output }]} />;
+}
+
+// Sent prints one batch the page posted to /api/collect: the events
+// in it, what each output answered and the exact body each one got,
+// or a note saying why the outputs were not used during this visit.
+function Sent({ b }: { b: Block }) {
+  const t = useT().term;
+  const { batch, note } = b.sent ?? {};
+  // A note block has no batch. It explains that nothing was sent,
+  // because the server's outputs did not match the consent screen
+  // or the server never answered the /api/context request at all.
+  if (!batch) {
+    const text = note === 'mismatch' ? t.outputsMismatch : t.outputsUnverified;
+    return <CommandBlock blockKey={b.key} steps={[{ cmd: 'outputs --check', output: () => <pre className="amber">{text}</pre> }]} />;
+  }
+  const output = () => (
+    <>
+      <pre className="val">{batch.events.map((e) => `${e.type.padEnd(9)}${eventLabel(e)}`).join('\n')}</pre>
+      {batch.error !== undefined && <pre className="amber">{batch.error === 'network' ? t.sentNoResponse : t.sentError(String(batch.error))}</pre>}
+      {batch.results.map((r) => (
+        <div key={r.output} className="dest">
+          <pre className={r.status === 'sent' ? 'green' : 'amber'}>{`── ${r.output} (${r.host}) ${r.status}${r.httpStatus ? ` ${r.httpStatus}` : r.status === 'failed' ? ` · ${t.sentNoResponse}` : ''}`}</pre>
+          <JsonView value={r.payload} />
+        </div>
+      ))}
+      <Source>{site.forwardIp ? t.sentNoteIp : t.sentNote}</Source>
+    </>
+  );
+  return <CommandBlock blockKey={b.key} steps={[{ cmd: 'POST /api/collect', output }]} />;
 }
 
 // Identity shows the anonymous id the cookie assigns on the first
@@ -351,6 +391,8 @@ export function BlockView({ b }: { b: Block }) {
       return <Limits b={b} s={s} />;
     case 'summary':
       return <Summary b={b} s={s} />;
+    case 'sent':
+      return <Sent b={b} />;
     default:
       return null;
   }

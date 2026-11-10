@@ -78,6 +78,11 @@ export const site = {
   // context.library field, derived from the prefix so a rebranded
   // deployment reports its own name in every event it builds.
   libraryName: `${prefix}-demo`,
+  // Outputs the consent gate names, baked in at build time. Empty by
+  // default, which keeps every event in the browser, and the page then
+  // never calls /api/collect or changes a word of the consent copy.
+  outputs: __CENSUS_OUTPUTS__.outputs,
+  forwardIp: __CENSUS_OUTPUTS__.forwardIp,
 };
 
 // Fork link for the repo the page was built from. It backs the fork

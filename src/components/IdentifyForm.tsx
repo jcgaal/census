@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n/lang';
+import { site } from '../site.config';
 import { useStoreApi } from '../tracking/store';
 
 // The identify form asks for an email and an optional name and
@@ -54,7 +55,7 @@ export function IdentifyForm({ onIdentified }: { onIdentified: () => void }) {
           <button className="pill pill--black" type="submit" disabled={busy}>
             {t.submit}
           </button>
-          <span className="form__note">{t.note}</span>
+          <span className="form__note">{site.outputs.length ? t.noteOutputs(site.outputs.map((o) => o.name)) : t.note}</span>
         </div>
       </form>
     </div>

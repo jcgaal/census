@@ -52,7 +52,7 @@ export function Footer() {
         <div>
           <h4 className="label">{f.privacy}</h4>
           <ul>
-            <li>{f.privacyNote}</li>
+            <li>{site.outputs.length ? f.privacyNoteOutputs : f.privacyNote}</li>
             {site.owner && <li>© 2026 {site.owner}</li>}
           </ul>
         </div>
